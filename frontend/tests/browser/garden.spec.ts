@@ -66,6 +66,23 @@ test("works without secure-context APIs, as on a plain-HTTP LAN address", async 
   expect(errors).toEqual([]);
 });
 
+test("survives browsers whose scrollIntoView returns a Promise", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // Newer Chrome returns a Promise from scroll methods.
+  await page.addInitScript(() => {
+    const scroll = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (...args) {
+      scroll.apply(this, args);
+      return Promise.resolve() as unknown as void;
+    };
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open chat", exact: true }).click();
+  await writePoems(page, [1, 2]);
+  expect(errors).toEqual([]);
+});
+
 test("sample page fits a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("http://127.0.0.1:8101");

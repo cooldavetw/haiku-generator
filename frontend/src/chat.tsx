@@ -55,7 +55,11 @@ export function Chat({ onHaiku }: { onHaiku: (haiku: Haiku) => void }) {
   const { messages, running, error, send } = useHaikuChat(onHaiku);
   const endRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: "end" }), [messages, error]);
+  // A block body: newer browsers return a Promise from scrollIntoView, which
+  // React would otherwise take for a cleanup function and call.
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: "end" });
+  }, [messages, error]);
 
   function submit(event?: FormEvent) {
     event?.preventDefault();
