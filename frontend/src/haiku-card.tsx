@@ -1,6 +1,6 @@
-import { backgrounds, scenes, type Haiku } from "./lib/haiku";
+import { backgrounds, scenes, type SavedHaiku } from "./lib/haiku";
 
-export function HaikuCard({ haiku }: { haiku: Partial<Haiku> }) {
+export function HaikuCard({ haiku }: { haiku: Partial<SavedHaiku> }) {
   const scene = haiku.image_name && Object.hasOwn(scenes, haiku.image_name) ? haiku.image_name : undefined;
   const background = haiku.background && Object.hasOwn(backgrounds, haiku.background) ? backgrounds[haiku.background] : backgrounds.mist;
   return (
@@ -13,8 +13,18 @@ export function HaikuCard({ haiku }: { haiku: Partial<Haiku> }) {
           </div>
         ))}
       </div>
-      {/* Relative, so the image resolves under the prefix the app is served at. */}
-      {scene && <img className="scene" data-testid="haiku-image" src={`images/${scene}`} alt={scenes[scene]} width={800} height={360} />}
+      {(haiku.illustration || scene) && (
+        <div className="scene-frame">
+          {haiku.illustration ? (
+            <img className="scene" data-testid="haiku-illustration" src={haiku.illustration}
+              alt="Illustration drawn for this haiku" width={800} height={360} />
+          ) : (
+            // Relative, so the image resolves under the prefix the app is served at.
+            <img className="scene" data-testid="haiku-image" src={`images/${scene}`} alt={scenes[scene!]} width={800} height={360} />
+          )}
+          {haiku.painting && <p className="painting">Painting an illustration…</p>}
+        </div>
+      )}
     </article>
   );
 }

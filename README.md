@@ -1,6 +1,6 @@
 # Haiku Garden
 
-A React frontend and FastAPI backend for Japanese haiku with English translations. The browser talks to the Python agent over [AG-UI](https://docs.ag-ui.com/); the agent calls the browser's `generate_haiku` tool, and React displays the poems. FastAPI serves the built frontend and the API together on one port, which is how the app runs in a Segma FastAPI container.
+A React frontend and FastAPI backend for Japanese haiku with English translations. The browser talks to the Python agent over [AG-UI](https://docs.ag-ui.com/); the agent calls the browser's `generate_haiku` tool, and React displays the poems. An OpenAI image model then paints an illustration for each poem. FastAPI serves the built frontend and the API together on one port, which is how the app runs in a Segma FastAPI container.
 
 ## Layout
 
@@ -8,6 +8,7 @@ A React frontend and FastAPI backend for Japanese haiku with English translation
 haiku-generator/
 ├── main.py                    # FastAPI: /health, /agent (AG-UI), and the built frontend
 ├── agent.py                   # Pydantic AI agent and instructions
+├── illustration.py            # Image model client and prompt
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── .env.example               # Backend model settings
@@ -18,7 +19,7 @@ haiku-generator/
     │   ├── haiku-app.tsx      # Garden page and poem collection
     │   ├── chat.tsx           # Chat panel; runs the AG-UI conversation
     │   ├── haiku-card.tsx
-    │   └── lib/               # Haiku schema, frontend tool, backend URLs and readiness
+    │   └── lib/               # Haiku schema, frontend tool, illustrations, backend URLs and readiness
     ├── public/images/         # Original local SVG illustrations
     ├── tests/                 # TypeScript unit tests and browser tests
     ├── package.json
@@ -40,7 +41,13 @@ cp .env.example .env.local
 npm --prefix frontend ci
 ```
 
-Set `OPENAI_API_KEY` in the root `.env.local`. `HAIKU_MODEL` defaults to `openai:gpt-4.1-mini`; select another compatible OpenAI model if needed. Exported environment variables take precedence over the file. The key stays in the backend; the frontend has no configuration.
+Set `OPENAI_API_KEY` in the root `.env.local`. Exported environment variables take precedence over the file. The key stays in the backend; the frontend has no configuration.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `HAIKU_MODEL` | `openai:gpt-4.1-mini` | Chat model that writes the poems |
+| `HAIKU_IMAGE_MODEL` | `gpt-image-1-mini` | OpenAI image model that illustrates each poem; empty turns illustrations off |
+| `HAIKU_IMAGE_QUALITY` | `low` | `low`, `medium`, `high` or `auto`; higher is slower and costs more |
 
 ## Run
 
@@ -74,7 +81,7 @@ The repository matches the Segma FastAPI container's contract:
 - The container builds the frontend with `npm ci` and `npm run build` in `frontend/` (its defaults), and runs only Uvicorn with `main.py`'s `app`. No Node process runs at runtime.
 - `main.py` serves `frontend/dist`. The build uses relative URLs (`base: "./"`), and the page gets a `<base>` for the prefix Segma strips (for example `/fastapi-prod/<id>/api/`), so assets and API calls stay under that prefix, with or without a trailing slash.
 - `GET /health` returns 200 for the container health check.
-- Set `OPENAI_API_KEY` (and optionally `HAIKU_MODEL`) in the app's environment variables.
+- Set `OPENAI_API_KEY` (and optionally the model variables above) in the app's environment variables.
 - `fastapi` and `uvicorn` are not pinned exactly, so the versions in the base image are kept.
 
 To call `/agent` from a page on another website through a Segma webhook URL, add that site under the webhook's allowed websites.
@@ -82,11 +89,15 @@ To call `/agent` from a page on another website through a Segma webhook URL, add
 ## Request flow
 
 ```text
-Browser → FastAPI /agent (AG-UI) → AI model
+Browser → FastAPI /agent (AG-UI) → chat model
 Browser ← streamed text and generate_haiku tool calls ← FastAPI
+Browser → FastAPI /illustration (poem) → image model
+Browser ← WebP image ← FastAPI
 ```
 
 `frontend/src/chat.tsx` runs the conversation with `@ag-ui/client`'s `HttpAgent`, sending `generate_haiku` as a frontend tool on every run. `main.py` uses [Pydantic AI's AG-UI adapter](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/) to expose the agent in `agent.py`. When a run ends, the browser validates each `generate_haiku` call with `frontend/src/lib/haiku.ts`, adds valid poems to the collection, and records a tool result in the conversation; invalid calls are reported in the chat. Previews render while a call streams.
+
+For each poem shown, the browser posts its lines to `/illustration`. FastAPI builds the image prompt itself (`illustration.py`), so the endpoint only accepts three short lines per language, and returns a WebP image. Until it arrives, which usually takes several seconds, the card shows the local illustration the agent chose, labeled "Painting an illustration…". If illustrations are off or the image model fails, the local illustration stays.
 
 ## Tests
 
@@ -108,8 +119,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Browser tests run against the built frontend served by FastAPI, so run `npm run build` first. They start the FastAPI test services automatically, using the root `.venv` with `requirements-dev.txt`. They cover missing-key setup, backend readiness, streamed tool calls, collection navigation, serving under a Segma-style URL prefix opened without a trailing slash, and mobile layout. Only the model is simulated; live generation requires your own API key.
+Browser tests run against the built frontend served by FastAPI, so run `npm run build` first. They start the FastAPI test services automatically, using the root `.venv` with `requirements-dev.txt`. They cover missing-key setup, backend readiness, streamed tool calls, collection navigation, serving under a Segma-style URL prefix opened without a trailing slash, and mobile layout. Only the models are simulated; live generation requires your own API key.
 
 ## Current limits
 
-The browser retains the latest 50 poems in memory; refresh clears the collection and the conversation. The schema enforces three nonempty lines per language; poetic quality and Japanese mora counts depend on the model. Model calls may incur provider usage charges. Add authentication, usage limits, and persistence as needed before public deployment.
+The browser retains the latest 50 poems and their illustrations in memory; refresh clears the collection and the conversation. Each illustration is one image-model call, billed by OpenAI. The schema enforces three nonempty lines per language; poetic quality and Japanese mora counts depend on the model. Model calls may incur provider usage charges. Add authentication, usage limits, and persistence as needed before public deployment.

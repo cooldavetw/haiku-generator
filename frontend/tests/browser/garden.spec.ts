@@ -39,6 +39,12 @@ test("chat tool adds poems, navigation works, and a new poem resets selection", 
   await expect(garden.getByText("Poem 1", { exact: true })).toBeVisible();
   await writePoems(page, [3]);
   await expect(garden.getByRole("button", { name: "Previous haiku" })).toBeDisabled();
+  // The image model's picture replaces the local placeholder, in the garden and the chat.
+  await expect(garden.getByText("Painting an illustration…")).toHaveCount(0);
+  const drawn = garden.getByTestId("haiku-illustration");
+  await expect(drawn).toBeVisible();
+  expect(await drawn.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await expect(page.getByRole("complementary", { name: "Haiku chat" }).getByTestId("haiku-illustration")).toHaveCount(3);
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

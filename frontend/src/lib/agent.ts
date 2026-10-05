@@ -30,7 +30,7 @@ export function partialArgs(json: string): Partial<Haiku> {
  */
 export function answerToolCalls(
   messages: readonly Message[],
-  show: (haiku: Haiku) => void,
+  show: (haiku: Haiku, toolCallId: string) => void,
   newId: () => string = () => randomUUID(),
 ): ToolMessage[] {
   const answered = new Set(messages.flatMap((m) => (m.role === "tool" ? [m.toolCallId] : [])));
@@ -47,7 +47,7 @@ export function answerToolCalls(
       } else {
         const parsed = haikuSchema.safeParse(partialArgs(call.function.arguments));
         if (parsed.success) {
-          show(parsed.data);
+          show(parsed.data, call.id);
           content = "Haiku displayed in the garden.";
         } else {
           error = `The haiku was not displayed: ${z.prettifyError(parsed.error)}`;

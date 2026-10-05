@@ -19,12 +19,12 @@ test("the tool's JSON schema describes the haiku and omits the $schema key", () 
 });
 
 test("a valid call is shown once and answered", () => {
-  const shown: Haiku[] = [];
+  const shown: [Haiku, string][] = [];
   const messages = [callMessage("c1", JSON.stringify(sampleHaiku))];
-  const results = answerToolCalls(messages, (h) => shown.push(h), () => "r1");
-  assert.deepEqual(shown, [sampleHaiku]);
+  const results = answerToolCalls(messages, (h, id) => shown.push([h, id]), () => "r1");
+  assert.deepEqual(shown, [[sampleHaiku, "c1"]]);
   assert.deepEqual(results, [{ id: "r1", role: "tool", toolCallId: "c1", content: "Haiku displayed in the garden." }]);
-  assert.deepEqual(answerToolCalls([...messages, ...results], (h) => shown.push(h)), []);
+  assert.deepEqual(answerToolCalls([...messages, ...results], (h, id) => shown.push([h, id])), []);
   assert.equal(shown.length, 1);
 });
 

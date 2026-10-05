@@ -22,7 +22,8 @@ export const haikuSchema = z.object({
 });
 
 export type Haiku = z.infer<typeof haikuSchema>;
-export type SavedHaiku = Haiku & { id: string };
+/** A poem in the collection; `illustration` is an object URL once the image model has drawn it. */
+export type SavedHaiku = Haiku & { id: string; illustration?: string; painting?: boolean };
 
 export const sampleHaiku: Haiku = {
   japanese: ["春風や", "小川の岸に", "花ひとつ"],
@@ -31,6 +32,10 @@ export const sampleHaiku: Haiku = {
   background: "blossom",
 };
 
-export function addHaiku(history: SavedHaiku[], haiku: Haiku, id: string): SavedHaiku[] {
-  return [{ ...haikuSchema.parse(haiku), id }, ...history].slice(0, 50);
+export function addHaiku(history: SavedHaiku[], haiku: Haiku, id: string, extra: Partial<SavedHaiku> = {}): SavedHaiku[] {
+  return [{ ...extra, ...haikuSchema.parse(haiku), id }, ...history].slice(0, 50);
+}
+
+export function updateHaiku(history: SavedHaiku[], id: string, changes: Partial<SavedHaiku>): SavedHaiku[] {
+  return history.map((haiku) => (haiku.id === id ? { ...haiku, ...changes, id } : haiku));
 }

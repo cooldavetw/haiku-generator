@@ -48,3 +48,6 @@ code { overflow-wrap: anywhere; }
 .composer button { border: 0; border-radius: 12px; padding: 0 16px; background: var(--ink); color: #fffdf7; cursor: pointer; }
 .chat button:disabled { opacity: .4; cursor: default; }
 @media (min-width: 900px) { body:has(.chat) .garden { padding-right: calc(min(420px, 100vw) + 24px); } }
+.scene-frame { position: relative; }
+.scene { aspect-ratio: 800 / 360; object-fit: cover; }
+.painting { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); margin: 0; padding: 6px 14px; border-radius: 30px; background: #fffdf7d9; color: var(--muted); font-size: 12px; letter-spacing: .04em; white-space: nowrap; }

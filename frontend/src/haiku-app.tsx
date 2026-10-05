@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { randomUUID } from "@ag-ui/client";
 import { Chat } from "./chat";
 import { HaikuCard } from "./haiku-card";
 import { getBackendStatus, type BackendStatus } from "./lib/backend";
-import { addHaiku, sampleHaiku, type Haiku, type SavedHaiku } from "./lib/haiku";
+import { addHaiku, sampleHaiku, updateHaiku, type Haiku, type SavedHaiku } from "./lib/haiku";
+import { requestIllustration } from "./lib/illustration";
 
 export default function HaikuApp() {
   const [status, setStatus] = useState<BackendStatus>("checking");
@@ -14,14 +14,17 @@ export default function HaikuApp() {
     void getBackendStatus().then(setStatus);
   }, []);
 
-  function show(haiku: Haiku) {
-    setHaikus((previous) => addHaiku(previous, haiku, randomUUID()));
+  function show(haiku: Haiku, id: string) {
+    setHaikus((previous) => addHaiku(previous, haiku, id, { painting: true }));
     setActiveIndex(0);
+    void requestIllustration(haiku).then((illustration) => {
+      setHaikus((previous) => updateHaiku(previous, id, { illustration, painting: false }));
+    });
   }
 
   return (
     <>
-      {status === "ready" && <Chat onHaiku={show} />}
+      {status === "ready" && <Chat haikus={haikus} onHaiku={show} />}
       <Garden status={status} haikus={haikus} activeIndex={activeIndex} onSelect={setActiveIndex} />
     </>
   );

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { HttpAgent, randomUUID, type AssistantMessage, type Message } from "@ag-ui/client";
 import { answerToolCalls, haikuTool, partialArgs } from "./lib/agent";
 import { backendUrl } from "./lib/backend";
-import type { Haiku } from "./lib/haiku";
+import type { Haiku, SavedHaiku } from "./lib/haiku";
 import { HaikuCard } from "./haiku-card";
 
 const suggestions = [
@@ -12,7 +12,7 @@ const suggestions = [
 ];
 
 /** One AG-UI conversation with FastAPI's /agent; poems go to `onHaiku`. */
-function useHaikuChat(onHaiku: (haiku: Haiku) => void) {
+function useHaikuChat(onHaiku: (haiku: Haiku, toolCallId: string) => void) {
   const [agent] = useState(() => new HttpAgent({ url: backendUrl("agent") }));
   const [messages, setMessages] = useState<Message[]>([]);
   const [running, setRunning] = useState(false);
@@ -41,7 +41,7 @@ function useHaikuChat(onHaiku: (haiku: Haiku) => void) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       // The tool runs here, after the run ends; no follow-up run is needed.
-      agent.addMessages(answerToolCalls(agent.messages, (haiku) => onHaikuRef.current(haiku)));
+      agent.addMessages(answerToolCalls(agent.messages, (haiku, id) => onHaikuRef.current(haiku, id)));
       setRunning(false);
     }
   }
@@ -49,7 +49,10 @@ function useHaikuChat(onHaiku: (haiku: Haiku) => void) {
   return { messages, running, error, send };
 }
 
-export function Chat({ onHaiku }: { onHaiku: (haiku: Haiku) => void }) {
+export function Chat({ haikus, onHaiku }: {
+  haikus: SavedHaiku[];
+  onHaiku: (haiku: Haiku, toolCallId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const { messages, running, error, send } = useHaikuChat(onHaiku);
@@ -96,10 +99,11 @@ export function Chat({ onHaiku }: { onHaiku: (haiku: Haiku) => void }) {
               {assistant.toolCalls?.map((call) => {
                 const result = results.get(call.id);
                 if (result?.error) return <p key={call.id} className="bubble error">{result.error}</p>;
-                const args = partialArgs(call.function.arguments);
+                // The saved poem carries its illustration; until then, the streaming arguments.
+                const haiku = haikus.find((saved) => saved.id === call.id) ?? partialArgs(call.function.arguments);
                 return (
                   <div key={call.id} className="tool-preview">
-                    {args.japanese?.length ? <HaikuCard haiku={args} /> : <p>Composing your haiku…</p>}
+                    {Array.isArray(haiku.japanese) ? <HaikuCard haiku={haiku} /> : <p>Composing your haiku…</p>}
                   </div>
                 );
               })}

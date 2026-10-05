@@ -1,5 +1,7 @@
 """Test-only model: exercises real FastAPI/AG-UI transport without provider calls."""
 
+import asyncio
+import base64
 import json
 import re
 
@@ -7,8 +9,12 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import UserPromptPart
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
+import illustration
 import main
 from agent import INSTRUCTIONS
+
+# A real 1x1 WebP, so the browser can decode the "generated" illustration.
+TINY_WEBP = base64.b64decode("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
 
 
 async def stream_poem(messages, info):
@@ -32,4 +38,12 @@ async def stream_poem(messages, info):
 
 test_agent = Agent(FunctionModel(stream_function=stream_poem), instructions=INSTRUCTIONS)
 main.get_agent = lambda: test_agent
+
+
+async def fake_draw(japanese, english):
+    await asyncio.sleep(0.5)  # long enough to see the placeholder
+    return TINY_WEBP
+
+
+illustration.draw = fake_draw
 app = main.app

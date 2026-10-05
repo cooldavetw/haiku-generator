@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { addHaiku, haikuSchema, sampleHaiku, scenes } from "../src/lib/haiku";
+import { addHaiku, haikuSchema, sampleHaiku, scenes, updateHaiku } from "../src/lib/haiku";
 
 test("requires three nonempty lines in both languages", () => {
   for (const language of ["japanese", "english"] as const) {
@@ -37,4 +37,11 @@ test("every allowed illustration exists locally", async () => {
     const svg = await readFile(new URL(`../public/images/${name}`, import.meta.url), "utf8");
     assert.match(svg, /^<svg/);
   }
+});
+
+test("an illustration lands on its own poem only", () => {
+  const history = addHaiku(addHaiku([], sampleHaiku, "a", { painting: true }), sampleHaiku, "b", { painting: true });
+  const updated = updateHaiku(history, "a", { illustration: "blob:x", painting: false });
+  assert.deepEqual(updated.map((p) => [p.id, p.illustration, p.painting]), [["b", undefined, true], ["a", "blob:x", false]]);
+  assert.equal(history[1].illustration, undefined);
 });

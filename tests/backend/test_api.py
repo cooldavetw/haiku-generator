@@ -89,3 +89,81 @@ def test_unbuilt_frontend_explains_itself_and_api_still_works(tmp_path):
     assert response.status_code == 503
     assert "npm run build" in response.json()["detail"]
     assert client.get("/health").status_code == 200
+
+
+POEM = {"japanese": ["春風や", "小川の岸に", "花ひとつ"], "english": ["A breeze", "by the river", "one flower"]}
+
+
+def test_illustration_needs_a_key(client):
+    response = client.post("/illustration", json=POEM)
+    assert response.status_code == 503
+    assert "OPENAI_API_KEY" in response.json()["detail"]
+
+
+def test_illustration_returns_the_drawn_image(client, monkeypatch):
+    calls = []
+
+    async def draw(japanese, english):
+        calls.append((japanese, english))
+        return b"image-bytes"
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(main.illustration, "draw", draw)
+    response = client.post("/illustration", json={**POEM, "english": [" A breeze ", "by the river", "one flower"]})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
+    assert response.content == b"image-bytes"
+    assert calls == [(POEM["japanese"], POEM["english"])]
+
+
+@pytest.mark.parametrize("poem", [
+    {**POEM, "japanese": ["one", "two"]},
+    {**POEM, "english": ["one", " ", "three"]},
+    {**POEM, "english": ["x" * 201, "two", "three"]},
+    {"japanese": POEM["japanese"]},
+])
+def test_illustration_rejects_malformed_poems(client, monkeypatch, poem):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    assert client.post("/illustration", json=poem).status_code == 422
+
+
+def test_illustration_can_be_turned_off(client, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("HAIKU_IMAGE_MODEL", "")
+    assert client.post("/illustration", json=POEM).status_code == 404
+
+
+def test_image_model_failure_is_reported_without_crashing(client, monkeypatch):
+    import httpx
+    import openai
+
+    async def draw(japanese, english):
+        raise openai.APIConnectionError(request=httpx.Request("POST", "https://api.openai.com/v1/images"))
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(main.illustration, "draw", draw)
+    response = client.post("/illustration", json=POEM)
+    assert response.status_code == 502
+    assert "image model failed" in response.json()["detail"]
+
+
+def test_image_request_uses_default_model_and_poem(monkeypatch):
+    import asyncio
+    import base64
+    import illustration
+
+    sent = {}
+
+    class Images:
+        async def generate(self, **kwargs):
+            sent.update(kwargs)
+            return type("R", (), {"data": [type("D", (), {"b64_json": base64.b64encode(b"img").decode()})()]})()
+
+    monkeypatch.delenv("HAIKU_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("HAIKU_IMAGE_QUALITY", raising=False)
+    monkeypatch.setattr(illustration, "get_client", lambda: type("C", (), {"images": Images()})())
+    assert asyncio.run(illustration.draw(POEM["japanese"], POEM["english"])) == b"img"
+    assert sent["model"] == "gpt-image-1-mini"
+    assert sent["quality"] == "low"
+    assert sent["output_format"] == "webp"
+    assert "春風や (A breeze)" in sent["prompt"]
