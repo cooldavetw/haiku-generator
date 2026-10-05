@@ -55,6 +55,17 @@ test("works under a Segma URL prefix opened without a trailing slash", async ({ 
   expect(outside).toEqual([]);
 });
 
+test("works without secure-context APIs, as on a plain-HTTP LAN address", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // Browsers expose crypto.randomUUID only on HTTPS or localhost.
+  await page.addInitScript(() => { Object.defineProperty(Crypto.prototype, "randomUUID", { value: undefined }); });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open chat", exact: true }).click();
+  await writePoems(page, [1]);
+  expect(errors).toEqual([]);
+});
+
 test("sample page fits a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("http://127.0.0.1:8101");

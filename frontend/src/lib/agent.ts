@@ -1,4 +1,4 @@
-import type { Message, Tool, ToolMessage } from "@ag-ui/client";
+import { randomUUID, type Message, type Tool, type ToolMessage } from "@ag-ui/client";
 import { z } from "zod";
 import { haikuSchema, type Haiku } from "./haiku";
 
@@ -31,7 +31,7 @@ export function partialArgs(json: string): Partial<Haiku> {
 export function answerToolCalls(
   messages: readonly Message[],
   show: (haiku: Haiku) => void,
-  newId: () => string = () => crypto.randomUUID(),
+  newId: () => string = () => randomUUID(),
 ): ToolMessage[] {
   const answered = new Set(messages.flatMap((m) => (m.role === "tool" ? [m.toolCallId] : [])));
   const results: ToolMessage[] = [];

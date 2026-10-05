@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { randomUUID } from "@ag-ui/client";
 import { Chat } from "./chat";
 import { HaikuCard } from "./haiku-card";
 import { getBackendStatus, type BackendStatus } from "./lib/backend";
@@ -14,7 +15,7 @@ export default function HaikuApp() {
   }, []);
 
   function show(haiku: Haiku) {
-    setHaikus((previous) => addHaiku(previous, haiku, crypto.randomUUID()));
+    setHaikus((previous) => addHaiku(previous, haiku, randomUUID()));
     setActiveIndex(0);
   }
 

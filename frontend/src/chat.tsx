@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { HttpAgent, type AssistantMessage, type Message } from "@ag-ui/client";
+import { HttpAgent, randomUUID, type AssistantMessage, type Message } from "@ag-ui/client";
 import { answerToolCalls, haikuTool, partialArgs } from "./lib/agent";
 import { backendUrl } from "./lib/backend";
 import type { Haiku } from "./lib/haiku";
@@ -32,7 +32,7 @@ function useHaikuChat(onHaiku: (haiku: Haiku) => void) {
     if (!content || agent.isRunning) return;
     setError(undefined);
     setRunning(true);
-    agent.addMessage({ id: crypto.randomUUID(), role: "user", content });
+    agent.addMessage({ id: randomUUID(), role: "user", content });
     try {
       await agent.runAgent({ tools: [haikuTool] }, {
         onRunErrorEvent: ({ event }) => setError(event.message),
