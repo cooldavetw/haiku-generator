@@ -1,22 +1,27 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function writePoems(page: Page, numbers: number[]) {
+  const input = page.getByRole("textbox", { name: "Message" });
+  const garden = page.getByRole("main");
+  for (const number of numbers) {
+    await input.fill(`Write poem ${number}`);
+    await input.press("Enter");
+    await expect(garden.getByText(`Poem ${number}`, { exact: true })).toBeVisible();
+  }
+}
 
 test("shows a usable sample and a clear setup state without a key", async ({ page, request }) => {
-  await page.goto("http://127.0.0.1:3101");
+  await page.goto("http://127.0.0.1:8101");
   await expect(page.getByRole("heading", { name: /Haiku Garden/ })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("OPENAI_API_KEY");
   await expect(page.getByTestId("haiku-japanese-line")).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Open chat" })).toHaveCount(0);
   expect(await page.getByTestId("haiku-image").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
-  const response = await request.post("http://127.0.0.1:3101/api/copilotkit/agent/tool_based_generative_ui/run", { data: {} });
+  const response = await request.post("http://127.0.0.1:8101/agent", { data: {} });
   expect(response.status()).toBe(503);
 });
 
-test("runtime advertises the same agent used by the frontend", async ({ request }) => {
-  const response = await request.get("/api/copilotkit/info");
-  expect(response.ok()).toBe(true);
-  expect(await response.text()).toContain("tool_based_generative_ui");
-});
-
-test("frontend has no model key and uses backend readiness", async ({ page }) => {
+test("a configured backend offers the chat and no setup notice", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Open chat", exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveCount(0);
@@ -27,25 +32,31 @@ test("chat tool adds poems, navigation works, and a new poem resets selection", 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "Open chat", exact: true }).click();
-  await expect(page.getByText("Nature", { exact: true })).toBeVisible();
-  const input = page.getByRole("textbox");
+  await expect(page.getByRole("button", { name: "Nature", exact: true })).toBeVisible();
   const garden = page.getByRole("main");
-  for (let index = 1; index <= 2; index++) {
-    await input.fill(`Write poem ${index}`);
-    await input.press("Enter");
-    await expect(garden.getByText(`Poem ${index}`, { exact: true })).toBeVisible();
-  }
+  await writePoems(page, [1, 2]);
   await garden.getByRole("button", { name: "Next haiku" }).click();
   await expect(garden.getByText("Poem 1", { exact: true })).toBeVisible();
-  await input.fill("Write poem 3");
-  await input.press("Enter");
-  await expect(garden.getByText("Poem 3", { exact: true })).toBeVisible();
+  await writePoems(page, [3]);
   await expect(garden.getByRole("button", { name: "Previous haiku" })).toBeDisabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test("works under a Segma URL prefix opened without a trailing slash", async ({ page }) => {
+  const outside: string[] = [];
+  page.on("request", (request) => {
+    if (!new URL(request.url()).pathname.startsWith("/fastapi-prod/7/api")) outside.push(request.url());
+  });
+  await page.goto("http://127.0.0.1:8102/fastapi-prod/7/api");
+  expect(await page.getByTestId("haiku-image").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+  await page.getByRole("button", { name: "Open chat", exact: true }).click();
+  await writePoems(page, [1]);
+  expect(outside).toEqual([]);
 });
 
 test("sample page fits a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("http://127.0.0.1:3101");
+  await page.goto("http://127.0.0.1:8101");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

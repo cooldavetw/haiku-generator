@@ -1,31 +1,32 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getAgentUrl, getBackendStatus } from "../lib/backend";
+import { backendUrl, getBackendStatus } from "../src/lib/backend";
 
-test("readiness comes from FastAPI without a frontend model key", async (t) => {
-  const originalKey = process.env.OPENAI_API_KEY;
-  delete process.env.OPENAI_API_KEY;
-  t.after(() => {
-    if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = originalKey;
-  });
-  t.mock.method(globalThis, "fetch", async (url: URL, options: RequestInit) => {
-    assert.equal(url.toString(), new URL("health", getAgentUrl()).toString());
+const BASE = "https://segma.example/fastapi-prod/7/api/";
+
+test("backend URLs stay under the prefix the page is served at", () => {
+  assert.equal(backendUrl("agent", BASE), "https://segma.example/fastapi-prod/7/api/agent");
+  assert.equal(backendUrl("health", "http://127.0.0.1:8000/"), "http://127.0.0.1:8000/health");
+});
+
+test("readiness comes from FastAPI's health endpoint", async (t) => {
+  t.mock.method(globalThis, "fetch", async (url: string, options: RequestInit) => {
+    assert.equal(url, `${BASE}health`);
     assert.equal(options.cache, "no-store");
     assert.ok(options.signal);
     return Response.json({ status: "ok", configured: true });
   });
-  assert.equal(await getBackendStatus(), "ready");
+  assert.equal(await getBackendStatus(BASE), "ready");
 });
 
 test("distinguishes an unconfigured backend from an unavailable one", async (t) => {
   t.mock.method(globalThis, "fetch", async () => Response.json({ status: "ok", configured: false }));
-  assert.equal(await getBackendStatus(), "unconfigured");
+  assert.equal(await getBackendStatus(BASE), "unconfigured");
 });
 
 test("treats connection failures as unavailable", async (t) => {
   t.mock.method(globalThis, "fetch", async () => { throw new TypeError("fetch failed"); });
-  assert.equal(await getBackendStatus(), "unavailable");
+  assert.equal(await getBackendStatus(BASE), "unavailable");
 });
 
 test("rejects unhealthy or malformed health responses", async (t) => {
@@ -37,6 +38,6 @@ test("rejects unhealthy or malformed health responses", async (t) => {
   ];
   t.mock.method(globalThis, "fetch", async () => responses.shift()!);
   for (let index = 0; index < 4; index++) {
-    assert.equal(await getBackendStatus(), "unavailable");
+    assert.equal(await getBackendStatus(BASE), "unavailable");
   }
 });

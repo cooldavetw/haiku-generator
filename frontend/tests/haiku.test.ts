@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { addHaiku, haikuSchema, sampleHaiku, scenes } from "../lib/haiku";
+import { addHaiku, haikuSchema, sampleHaiku, scenes } from "../src/lib/haiku";
 
 test("requires three nonempty lines in both languages", () => {
   for (const language of ["japanese", "english"] as const) {

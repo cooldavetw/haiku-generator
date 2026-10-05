@@ -29,3 +29,22 @@ code { overflow-wrap: anywhere; }
 .tool-preview .japanese { font-size: 24px; }
 .tool-preview .english { font-size: 13px; }
 @media (max-width: 480px) { .garden { padding: 32px 16px 90px; } .haiku-lines { padding: 32px 16px; gap: 22px; } }
+.chat-toggle { position: fixed; right: 24px; bottom: 24px; z-index: 10; width: 56px; height: 56px; border: 0; border-radius: 50%; background: var(--ink); color: #fffdf7; font-size: 22px; cursor: pointer; box-shadow: 0 10px 30px #20342733; }
+.chat { position: fixed; top: 0; right: 0; bottom: 0; z-index: 10; display: flex; flex-direction: column; width: min(420px, 100vw); background: #fffdf7; border-left: 1px solid #dce1d7; box-shadow: -10px 0 40px #2034271a; }
+.chat > header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e6e9e1; }
+.chat h2 { margin: 0; font-family: Georgia, serif; font-size: 18px; font-weight: 400; }
+.chat > header button { border: 0; background: none; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; }
+.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 20px; }
+.bubble { margin: 0; padding: 10px 14px; border-radius: 14px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 85%; }
+.bubble.user { align-self: flex-end; background: var(--ink); color: #fffdf7; }
+.bubble.assistant { align-self: flex-start; background: #ecefe5; }
+.bubble.pending { color: var(--muted); }
+.bubble.error { align-self: stretch; max-width: none; background: #f6e6e3; color: #7a2e22; }
+.chat-log .tool-preview p { color: var(--muted); font-size: 14px; }
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; }
+.suggestions button { border: 1px solid #cbd4c8; border-radius: 30px; padding: 6px 14px; background: none; color: var(--ink); font-size: 13px; cursor: pointer; }
+.composer { display: flex; gap: 8px; padding: 12px 20px 20px; border-top: 1px solid #e6e9e1; }
+.composer textarea { flex: 1; resize: none; border: 1px solid #cbd4c8; border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--ink); background: #fff; }
+.composer button { border: 0; border-radius: 12px; padding: 0 16px; background: var(--ink); color: #fffdf7; cursor: pointer; }
+.chat button:disabled { opacity: .4; cursor: default; }
+@media (min-width: 900px) { body:has(.chat) .garden { padding-right: calc(min(420px, 100vw) + 24px); } }

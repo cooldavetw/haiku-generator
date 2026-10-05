@@ -1,27 +1,29 @@
 # Haiku Garden
 
-A Next.js frontend and FastAPI backend for Japanese haiku with English translations. CopilotKit carries chat requests to the Python agent and streams frontend tool calls back to the browser, where React displays the poems.
+A React frontend and FastAPI backend for Japanese haiku with English translations. The browser talks to the Python agent over [AG-UI](https://docs.ag-ui.com/); the agent calls the browser's `generate_haiku` tool, and React displays the poems. FastAPI serves the built frontend and the API together on one port, which is how the app runs in a Segma FastAPI container.
 
 ## Layout
 
 ```text
 haiku-generator/
-├── main.py                    # FastAPI entry point
+├── main.py                    # FastAPI: /health, /agent (AG-UI), and the built frontend
 ├── agent.py                   # Pydantic AI agent and instructions
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── .env.example               # Backend model settings
-├── tests/backend/             # Python tests and simulated model fixture
+├── tests/backend/             # Python tests and simulated model services
 └── frontend/
-    ├── app/                   # Next.js pages, global CSS, and API route
-    ├── components/haiku-app.tsx
-    ├── lib/                   # Haiku schema and backend readiness check
+    ├── index.html             # Vite entry page
+    ├── src/
+    │   ├── haiku-app.tsx      # Garden page and poem collection
+    │   ├── chat.tsx           # Chat panel; runs the AG-UI conversation
+    │   ├── haiku-card.tsx
+    │   └── lib/               # Haiku schema, frontend tool, backend URLs and readiness
     ├── public/images/         # Original local SVG illustrations
     ├── tests/                 # TypeScript unit tests and browser tests
-    ├── .env.example           # Backend address only
     ├── package.json
     ├── package-lock.json
-    ├── next.config.ts
+    ├── vite.config.ts
     ├── tsconfig.json
     └── playwright.config.ts
 ```
@@ -36,51 +38,55 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 cp .env.example .env.local
 npm --prefix frontend ci
-cp frontend/.env.example frontend/.env.local
 ```
 
-Set `OPENAI_API_KEY` in the **root `.env.local`**. FastAPI loads this file. `HAIKU_MODEL` defaults to `openai:gpt-4.1-mini`; select another compatible OpenAI model if needed.
-
-Next.js loads **`frontend/.env.local`**, which contains only `AGENT_URL` (default `http://127.0.0.1:8000/agent`). It checks FastAPI's `/health` endpoint to determine whether generation is configured. The model API key belongs only in the backend configuration. Exported environment variables take precedence over the corresponding files.
+Set `OPENAI_API_KEY` in the root `.env.local`. `HAIKU_MODEL` defaults to `openai:gpt-4.1-mini`; select another compatible OpenAI model if needed. Exported environment variables take precedence over the file. The key stays in the backend; the frontend has no configuration.
 
 ## Run
 
-Start FastAPI from the repository root:
+Build the frontend, then start FastAPI from the repository root:
 
 ```sh
+npm --prefix frontend run build
 source .venv/bin/activate
 python main.py
 ```
 
-For automatic backend reload, use `python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000` instead.
+Open http://127.0.0.1:8000 and use the chat button. Try “Write a haiku about the ocean.” New poems appear first; Previous and Next browse your collection. Interactive API docs are at http://127.0.0.1:8000/docs.
 
-- API: http://127.0.0.1:8000
-- Interactive docs: http://127.0.0.1:8000/docs
-- Health: http://127.0.0.1:8000/health
+Rebuild the frontend after changing its source; restart FastAPI after changing `.env.local`. Before the first build, `/` returns 503 with build instructions. If FastAPI has no API key, the page shows a sample poem and setup instructions.
 
-In a second terminal, start Next.js:
+### Development
+
+For automatic reload, run the backend with `python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000` and, in a second terminal, the Vite dev server:
 
 ```sh
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:3000 and use the chat button. Try “Write a haiku about the ocean.” New poems appear first; Previous and Next browse your collection.
+Open http://127.0.0.1:5173. Vite proxies `/agent` and `/health` to FastAPI; set `API_URL` to use a backend elsewhere.
 
-If FastAPI is offline or has no API key, the homepage shows a sample poem and setup instructions. After configuring or starting FastAPI, refresh the page. Restart FastAPI after changing the root `.env.local`; restart Next.js after changing `frontend/.env.local`.
+## Segma deployment
 
-For a production frontend build, run `npm run build` followed by `npm start` inside `frontend/`, with FastAPI running separately.
+The repository matches the Segma FastAPI container's contract:
+
+- The container builds the frontend with `npm ci` and `npm run build` in `frontend/` (its defaults), and runs only Uvicorn with `main.py`'s `app`. No Node process runs at runtime.
+- `main.py` serves `frontend/dist`. The build uses relative URLs (`base: "./"`), and the page gets a `<base>` for the prefix Segma strips (for example `/fastapi-prod/<id>/api/`), so assets and API calls stay under that prefix, with or without a trailing slash.
+- `GET /health` returns 200 for the container health check.
+- Set `OPENAI_API_KEY` (and optionally `HAIKU_MODEL`) in the app's environment variables.
+- `fastapi` and `uvicorn` are not pinned exactly, so the versions in the base image are kept.
+
+To call `/agent` from a page on another website through a Segma webhook URL, add that site under the webhook's allowed websites.
 
 ## Request flow
 
 ```text
-Browser → Next.js /api/copilotkit → FastAPI /agent → AI model
-Browser ← streamed frontend tool calls ← FastAPI ← model output
+Browser → FastAPI /agent (AG-UI) → AI model
+Browser ← streamed text and generate_haiku tool calls ← FastAPI
 ```
 
-`frontend/app/api/copilotkit/[[...slug]]/route.ts` registers an `HttpAgent` that forwards to FastAPI. `main.py` uses [Pydantic AI's AG-UI adapter](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/) to expose the agent in `agent.py`. This follows [CopilotKit's HTTP agent integration](https://docs.copilotkit.ai/pydantic-ai).
-
-The browser's `generate_haiku` tool validates model arguments using `frontend/lib/haiku.ts`, adds each poem to React state, and renders a card with a local illustration. The browser communicates with Next.js on the same origin, so local use needs no cross-origin configuration.
+`frontend/src/chat.tsx` runs the conversation with `@ag-ui/client`'s `HttpAgent`, sending `generate_haiku` as a frontend tool on every run. `main.py` uses [Pydantic AI's AG-UI adapter](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/) to expose the agent in `agent.py`. When a run ends, the browser validates each `generate_haiku` call with `frontend/src/lib/haiku.ts`, adds valid poems to the collection, and records a tool result in the conversation; invalid calls are reported in the chat. Previews render while a call streams.
 
 ## Tests
 
@@ -102,10 +108,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Browser tests start Next.js and FastAPI test services automatically. They use the root `.venv` and require `requirements-dev.txt`. They cover missing-key setup, backend readiness without a frontend model key, agent discovery, streamed tool calls through the real Next.js-to-FastAPI connection, collection navigation, and mobile layout. Only the model is simulated; live generation requires your own API key.
-
-The scoped npm override in `frontend/package.json` updates the older provider utility's `undici` dependency to a patched release.
+Browser tests run against the built frontend served by FastAPI, so run `npm run build` first. They start the FastAPI test services automatically, using the root `.venv` with `requirements-dev.txt`. They cover missing-key setup, backend readiness, streamed tool calls, collection navigation, serving under a Segma-style URL prefix opened without a trailing slash, and mobile layout. Only the model is simulated; live generation requires your own API key.
 
 ## Current limits
 
-The browser retains the latest 50 poems in memory; refresh clears the collection. The schema enforces three nonempty lines per language; poetic quality and Japanese mora counts depend on the model. Model calls may incur provider usage charges. The app is intended for local use; add authentication, usage limits, and persistence as needed before public deployment.
+The browser retains the latest 50 poems in memory; refresh clears the collection and the conversation. The schema enforces three nonempty lines per language; poetic quality and Japanese mora counts depend on the model. Model calls may incur provider usage charges. Add authentication, usage limits, and persistence as needed before public deployment.
